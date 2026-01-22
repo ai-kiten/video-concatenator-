@@ -53,18 +53,28 @@ async function loadFFmpeg() {
     if (ffmpegLoaded) return;
 
     try {
-        const { createFFmpeg, fetchFile } = FFmpeg;
+        const { FFmpeg } = window.FFmpegWASM || {};
+        const { toBlobURL } = window.FFmpegUtil || {};
 
-        if (!createFFmpeg) {
+        if (!FFmpeg || !toBlobURL) {
             throw new Error('FFmpegライブラリが読み込まれていません');
         }
 
-        ffmpeg = createFFmpeg({
-            log: true,
-            corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js'
+        ffmpeg = new FFmpeg();
+
+        ffmpeg.on('log', ({ message }) => {
+            console.log('[FFmpeg]', message);
         });
 
-        await ffmpeg.load();
+        ffmpeg.on('progress', ({ progress, time }) => {
+            console.log(`[FFmpeg] Progress: ${(progress * 100).toFixed(1)}%, Time: ${time}`);
+        });
+
+        const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd';
+        await ffmpeg.load({
+            coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+            wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+        });
 
         ffmpegLoaded = true;
         console.log('✓ FFmpeg読み込み成功');
@@ -342,17 +352,21 @@ async function concatenateVideos(catchFile, bodyFile, outputName) {
         const bgmVol = bgmFile ? (parseFloat(DOM.bgmVolume.value) / 100) : 0;
 
         // ファイル書き込み
-        const { fetchFile } = FFmpeg;
         console.log(`ファイル書き込み開始...`);
-
-        ffmpeg.FS('writeFile', catchFileName, await fetchFile(catchFile));
+        const catchData = await fileToUint8Array(catchFile);
+        console.log(`キャッチ動画データ取得完了: ${(catchData.byteLength / 1024 / 1024).toFixed(2)} MB`);
+        await ffmpeg.writeFile(catchFileName, catchData);
         console.log(`✓ キャッチ動画書き込み完了: ${catchFileName}`);
 
-        ffmpeg.FS('writeFile', bodyFileName, await fetchFile(bodyFile));
+        const bodyData = await fileToUint8Array(bodyFile);
+        console.log(`ボディ動画データ取得完了: ${(bodyData.byteLength / 1024 / 1024).toFixed(2)} MB`);
+        await ffmpeg.writeFile(bodyFileName, bodyData);
         console.log(`✓ ボディ動画書き込み完了: ${bodyFileName}`);
 
         if (bgmFileName) {
-            ffmpeg.FS('writeFile', bgmFileName, await fetchFile(bgmFile));
+            const bgmData = await fileToUint8Array(bgmFile);
+            console.log(`BGMデータ取得完了: ${(bgmData.byteLength / 1024 / 1024).toFixed(2)} MB`);
+            await ffmpeg.writeFile(bgmFileName, bgmData);
             console.log(`✓ BGM書き込み完了: ${bgmFileName}`);
         }
 
@@ -369,7 +383,7 @@ async function concatenateVideos(catchFile, bodyFile, outputName) {
         }
 
         // 出力ファイル読み込み
-        const data = ffmpeg.FS('readFile', outputFileName);
+        const data = await ffmpeg.readFile(outputFileName);
         console.log(`✓ 出力ファイル読み込み完了: ${(data.byteLength / 1024 / 1024).toFixed(2)} MB`);
 
         // クリーンアップ
@@ -398,26 +412,27 @@ async function processWithCopyMode(catchFileName, bodyFileName, concatFileName, 
     console.log('FFmpeg実行中（超高速モード - 再エンコードなし）...');
 
     const concatList = `file '${catchFileName}'\nfile '${bodyFileName}'`;
-    ffmpeg.FS('writeFile', concatFileName, new TextEncoder().encode(concatList));
+    await ffmpeg.writeFile(concatFileName, new TextEncoder().encode(concatList));
     console.log('✓ Concatファイル作成完了');
 
     try {
         console.log('超高速モード: concatプロトコルを使用');
-        await ffmpeg.run(
+        await ffmpeg.exec([
             '-f', 'concat',
             '-safe', '0',
             '-i', concatFileName,
             '-c', 'copy',
             '-movflags', 'faststart',
+            '-y',
             outputFileName
-        );
+        ]);
         console.log('✓ 超高速モード成功（concatプロトコル）');
     } catch (copyError) {
         console.log('超高速モード失敗、filter_complexで再試行...');
         console.error('Copyモードエラー:', copyError);
 
         try {
-            await ffmpeg.run(
+            await ffmpeg.exec([
                 '-i', catchFileName,
                 '-i', bodyFileName,
                 '-filter_complex', '[0:v][0:a][1:v][1:a]concat=n=2:v=1:a=1[outv][outa]',
@@ -430,8 +445,9 @@ async function processWithCopyMode(catchFileName, bodyFileName, concatFileName, 
                 '-b:a', '128k',
                 '-movflags', 'faststart',
                 '-threads', '0',
+                '-y',
                 outputFileName
-            );
+            ]);
             console.log('✓ フォールバック成功（filter_complex）');
         } catch (fallbackError) {
             console.error('フォールバックもエラー:', fallbackError);
@@ -445,7 +461,7 @@ async function processWithBGMFastMode(catchFileName, bodyFileName, bgmFileName, 
     console.log('FFmpeg実行中（BGM付きモード）...');
 
     // BGMがある場合は再エンコードが必要（コピーモードは使えない）
-    await ffmpeg.run(
+    await ffmpeg.exec([
         '-i', catchFileName,
         '-i', bodyFileName,
         '-i', bgmFileName,
@@ -461,8 +477,9 @@ async function processWithBGMFastMode(catchFileName, bodyFileName, bgmFileName, 
         '-ar', '48000',
         '-movflags', 'faststart',
         '-threads', '0',
+        '-y',
         outputFileName
-    );
+    ]);
     console.log('✓ BGM付きモード成功');
 }
 
@@ -473,7 +490,7 @@ async function processWithReencode(catchFileName, bodyFileName, bgmFileName, out
     const filterComplex = buildFilterComplex(hasSpeedChange, bgmFileName, speed, bgmVol);
     const ffmpegArgs = buildFFmpegArgs(catchFileName, bodyFileName, bgmFileName, filterComplex, outputFileName);
 
-    await ffmpeg.run(...ffmpegArgs);
+    await ffmpeg.exec(ffmpegArgs);
     console.log('✓ FFmpeg実行完了');
 }
 
@@ -517,6 +534,7 @@ function buildFFmpegArgs(catchFileName, bodyFileName, bgmFileName, filterComplex
         '-ar', '44100',              // サンプルレート下げて高速化
         '-movflags', 'faststart',
         '-threads', '0',
+        '-y',
         outputFileName
     );
 
@@ -526,11 +544,11 @@ function buildFFmpegArgs(catchFileName, bodyFileName, bgmFileName, filterComplex
 // 一時ファイルクリーンアップ
 async function cleanupTempFiles(catchFileName, bodyFileName, bgmFileName, concatFileName, outputFileName) {
     try {
-        ffmpeg.FS('unlink', catchFileName);
-        ffmpeg.FS('unlink', bodyFileName);
-        if (bgmFileName) ffmpeg.FS('unlink', bgmFileName);
-        if (concatFileName) ffmpeg.FS('unlink', concatFileName);
-        ffmpeg.FS('unlink', outputFileName);
+        await ffmpeg.deleteFile(catchFileName);
+        await ffmpeg.deleteFile(bodyFileName);
+        if (bgmFileName) await ffmpeg.deleteFile(bgmFileName);
+        if (concatFileName) await ffmpeg.deleteFile(concatFileName);
+        await ffmpeg.deleteFile(outputFileName);
         console.log('✓ 一時ファイル削除完了');
     } catch (e) {
         console.warn('クリーンアップエラー:', e);
