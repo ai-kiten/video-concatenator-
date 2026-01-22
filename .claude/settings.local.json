@@ -9,7 +9,12 @@
       "Bash(while read file)",
       "Bash(do curl -sO \"https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/$file\")",
       "Bash(done)",
-      "Bash(open:*)"
+      "Bash(open:*)",
+      "Bash(git branch:*)",
+      "Bash(git remote add:*)",
+      "Bash(git push:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }
