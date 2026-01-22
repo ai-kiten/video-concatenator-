@@ -1,0 +1,13 @@
+# macOS
+.DS_Store
+
+# ローカルライブラリ（CDN使用のため不要）
+libs/
+
+# Python
+__pycache__/
+*.py[cod]
+server.py
+
+# その他
+*.log

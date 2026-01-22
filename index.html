@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>動画連結くん</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='75' font-size='75'>🎬</text></svg>">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1 class="title">動画連結くん</h1>
+            <p class="subtitle">動画をアップロードして連結</p>
+
+            <details class="usage-guide">
+                <summary class="usage-summary">使い方を見る</summary>
+                <div class="usage-content">
+                    <h3>📌 基本的な使い方</h3>
+                    <ol>
+                        <li>動画ファイルをアップロード（ファイル名に「キャッチ」または「冒頭」を含むものと含まないものを分けて認識）</li>
+                        <li>必要に応じてBGM（MP3のみ）をアップロード</li>
+                        <li>倍速設定を調整（デフォルト: 1.00倍）</li>
+                        <li>「連結開始」ボタンをクリック</li>
+                        <li>完成した動画をダウンロード</li>
+                    </ol>
+
+                    <h3>⚠️ 注意事項</h3>
+                    <ul>
+                        <li><strong>BGMなし・倍速変更なし</strong>: 超高速処理（数秒で完了）⚡⚡⚡</li>
+                        <li><strong>BGMあり または 倍速変更あり</strong>: 再エンコードが必要なため処理に時間がかかります ⏱️</li>
+                        <li>複数の動画ペアを一度に処理できます</li>
+                        <li>完成した動画はZIPファイルで一括ダウンロード可能</li>
+                    </ul>
+                </div>
+            </details>
+        </header>
+
+        <main class="main">
+            <section class="upload-section">
+                <div class="upload-group-single">
+                    <label class="upload-label">動画ファイル</label>
+                    <div class="upload-area" id="videoDropZone">
+                        <input type="file" id="videoInput" accept="video/*" multiple class="file-input">
+                        <div class="upload-placeholder">
+                            <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <span class="upload-text">クリックまたはドラッグ&ドロップ</span>
+                            <span class="upload-count" id="videoCount">0ファイル</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="upload-group-single">
+                    <label class="upload-label">BGM（MP3のみ・オプション）</label>
+                    <div class="upload-area" id="bgmDropZone">
+                        <input type="file" id="bgmInput" accept="audio/mpeg,.mp3" class="file-input">
+                        <div class="upload-placeholder">
+                            <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path d="M9 18V5l12-2v13M9 18c0 1.66-1.34 3-3 3s-3-1.34-3-3 1.34-3 3-3 3 1.34 3 3zm12-2c0 1.66-1.34 3-3 3s-3-1.34-3-3 1.34-3 3-3 3 1.34 3 3z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <span class="upload-text" id="bgmText">BGMを選択</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <div class="setting-item">
+                        <label class="setting-label">再生速度 (0.50〜2.00倍)</label>
+                        <div class="speed-control">
+                            <input type="number" id="speedInput" class="speed-input" min="0.50" max="2.00" step="0.01" value="1.00">
+                            <span class="speed-unit">倍速</span>
+                        </div>
+                    </div>
+
+                    <div class="setting-item" id="bgmVolumeSection" style="display: none;">
+                        <label class="setting-label">BGM音量 (0〜100%)</label>
+                        <div class="volume-control">
+                            <input type="range" id="bgmVolume" class="volume-slider" min="0" max="100" value="50">
+                            <span class="volume-value" id="bgmVolumeValue">50%</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <div class="video-list-container">
+                <div class="video-list-header">アップロード済み動画</div>
+                <div id="videoList" class="video-list"></div>
+            </div>
+
+            <div id="pairsContainer" class="pairs-container" style="display: none;">
+                <div class="pairs-header">連結リスト</div>
+                <div id="pairsList" class="pairs-list"></div>
+            </div>
+
+            <button id="processBtn" class="process-btn" disabled>
+                動画を連結する
+            </button>
+
+            <div id="progress" class="progress-container" style="display: none;">
+                <div class="progress-text" id="progressText">処理中...</div>
+                <div class="progress-bar-bg">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+            </div>
+
+            <div id="results" class="results-container" style="display: none;">
+                <div class="results-header-container">
+                    <div class="results-header">完成動画</div>
+                    <button id="downloadAllBtn" class="download-all-btn">すべてダウンロード</button>
+                </div>
+                <div id="resultsList" class="results-list"></div>
+            </div>
+        </main>
+    </div>
+
+    <!-- FFmpeg.wasm ライブラリ（CDN版） -->
+    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/umd/ffmpeg.js"></script>
+    <script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
