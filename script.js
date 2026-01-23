@@ -422,49 +422,28 @@ async function concatenateVideos(catchFile, bodyFile, outputName) {
 async function processWithCopyMode(catchFileName, bodyFileName, concatFileName, outputFileName) {
     console.log('FFmpeg実行中（超高速モード - 再エンコードなし）...');
 
-    const concatList = `file '${catchFileName}'\nfile '${bodyFileName}'`;
-    await ffmpeg.writeFile(concatFileName, new TextEncoder().encode(concatList));
-    console.log('✓ Concatファイル作成完了');
-
-    try {
-        console.log('超高速モード: concatプロトコルを使用');
-        await ffmpeg.exec([
-            '-f', 'concat',
-            '-safe', '0',
-            '-i', concatFileName,
-            '-c', 'copy',
-            '-movflags', 'faststart',
-            '-y',
-            outputFileName
-        ]);
-        console.log('✓ 超高速モード成功（concatプロトコル）');
-    } catch (copyError) {
-        console.log('超高速モード失敗、filter_complexで再試行...');
-        console.error('Copyモードエラー:', copyError);
-
-        try {
-            await ffmpeg.exec([
-                '-i', catchFileName,
-                '-i', bodyFileName,
-                '-filter_complex', '[0:v][0:a][1:v][1:a]concat=n=2:v=1:a=1[outv][outa]',
-                '-map', '[outv]',
-                '-map', '[outa]',
-                '-c:v', 'libx264',
-                '-preset', 'ultrafast',
-                '-crf', '28',
-                '-c:a', 'aac',
-                '-b:a', '128k',
-                '-movflags', 'faststart',
-                '-threads', '0',
-                '-y',
-                outputFileName
-            ]);
-            console.log('✓ フォールバック成功（filter_complex）');
-        } catch (fallbackError) {
-            console.error('フォールバックもエラー:', fallbackError);
-            throw new Error(`動画連結失敗: ${fallbackError.message || 'unknown error'}`);
-        }
-    }
+    // copyモードは可変フレームレート(VFR)動画で音ズレが発生するため
+    // filter_complexで確実に連結（映像・音声ともに再エンコード）
+    console.log('高速モード: filter_complexで確実に連結');
+    await ffmpeg.exec([
+        '-i', catchFileName,
+        '-i', bodyFileName,
+        '-filter_complex', '[0:v][0:a][1:v][1:a]concat=n=2:v=1:a=1[outv][outa]',
+        '-map', '[outv]',
+        '-map', '[outa]',
+        '-c:v', 'libx264',
+        '-preset', 'ultrafast',
+        '-crf', '23',
+        '-pix_fmt', 'yuv420p',
+        '-c:a', 'aac',
+        '-b:a', '192k',
+        '-ar', '48000',
+        '-movflags', 'faststart',
+        '-threads', '0',
+        '-y',
+        outputFileName
+    ]);
+    console.log('✓ 高速モード成功（filter_complex）');
 }
 
 // BGM高速モード（映像・音声処理）
