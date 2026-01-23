@@ -119,9 +119,19 @@ function classifyVideos() {
 
     videoFiles.forEach((file, index) => {
         const videoData = { file, index };
-        if (file.name.includes('キャッチ') || file.name.includes('冒頭')) {
+        // ファイル名の先頭部分で判定（「キャッチ」「冒頭」が先に出現するか確認）
+        const catchIndex = Math.min(
+            file.name.indexOf('キャッチ') !== -1 ? file.name.indexOf('キャッチ') : Infinity,
+            file.name.indexOf('冒頭') !== -1 ? file.name.indexOf('冒頭') : Infinity
+        );
+        const bodyIndex = file.name.indexOf('ボディ') !== -1 ? file.name.indexOf('ボディ') : Infinity;
+
+        if (catchIndex < bodyIndex) {
             catchVideos.push(videoData);
+        } else if (bodyIndex < Infinity) {
+            bodyVideos.push(videoData);
         } else {
+            // どちらも含まれていない場合はボディとして扱う
             bodyVideos.push(videoData);
         }
     });
